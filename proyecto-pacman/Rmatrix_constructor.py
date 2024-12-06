@@ -1,5 +1,6 @@
 IN_FILENAME = "map.txt"
 OUT_FILENAME = "base_r.txt"
+WALL_FILENAME = "wall_index.txt"
 base_map: list[int] = []
 wall_index: list[int] = []
 
@@ -48,3 +49,11 @@ with open(OUT_FILENAME, 'w') as file:
         if index < (len(base_map) - 1):
             file.write("|")
     print(f"\nSaved result to file at ({OUT_FILENAME})")
+
+#SAVE WALL INDEX
+with open(WALL_FILENAME, 'w') as file:
+    for index,value in enumerate(wall_index):
+        file.write(str(value))
+        if index < (len(wall_index) - 1):
+            file.write("|")
+    print(f"Also, saved wall index to file at ({WALL_FILENAME})")
