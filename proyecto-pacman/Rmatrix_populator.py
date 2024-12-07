@@ -1,5 +1,6 @@
 import json
 BASE_PATH = "base_r.txt"
+WALL_PATH = "wall_index.txt"
 
 # NOTE - ALL state tuples are given as (ghost1-pos, ghost2-pos, player-pos)
 
@@ -11,6 +12,14 @@ def load_base(filename:str = BASE_PATH) -> list[int]:
         for value in file_str.split("|"):
             base_matrix.append(int(value))
     return base_matrix
+#Load index with all possible wall positions
+def load_walls(filename:str = WALL_PATH) -> list[int]:
+    wall_matrix:list[int] = []
+    with open(filename, 'r') as file:
+        file_str = file.read()
+        for value in file_str.split("|"):
+            wall_matrix.append(int(value))
+    return wall_matrix
 
 #Load given state's matrix from specified json file.
 def load_matrix(filename:str, state:tuple[int,int,int], default_fallback:bool = False) -> list[int]:
@@ -54,7 +63,7 @@ def parse_action(initial_pos:int, action:int, dimension:tuple[int,int]) -> int:
             raise ValueError("Action can only be stay (-1); or move north (0), east (1), south (2) or west (3)")
 
 #Populate given matrix with heatmap
-def populate_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int,int], position:int = None, value:int = 200, decay:int = 40) -> list[int]:
+def populate_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int,int], position:int = None, value:int = 400, decay:int = 50) -> list[int]:
     if (position is None):
         position = state[2]
 
@@ -68,15 +77,36 @@ def populate_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,
                         target = populate_matrix(target, dimension, state, newPos, value - decay, decay)
     return target
 
+#Construct dictionary with all possible combinations of ghost positions for a given player position
+def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls()) -> dict[tuple[int,int],list[int]]:
+    effective_range = []
+    for i in range(dimension[0]*dimension[1]):
+        if i not in wall_index:
+            effective_range.append(i)
+    
+    r_dict:dict[tuple[int,int],list[int]] = dict()
+
+    for ghost1_pos in effective_range:
+        for ghost2_pos in effective_range:
+            if (ghost1_pos != ghost2_pos):
+                state = (ghost1_pos, ghost2_pos, player_pos)
+                ghost_pos = (ghost1_pos,ghost2_pos)
+                r_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay)
+                r_dict[ghost_pos] = r_matrix
+    return r_dict   
+
 #Print matrix to console, showing values
-def print_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int,int], max_value:int) -> None:
+def print_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int,int]) -> None:
     def reduce(value:int, max_value:int) -> int:
         if (value < 0): #Do not reduce walls nor penalties
+            return value
+        if (max_value == 0): #Do not divide by zero, rather return identity
             return value
         proportion = (value / max_value) * 10
         return round(proportion)
     acc = 0
     row = 0
+    max_value = max(target)
 
     for square in target:
         square_norm:int = reduce(square, max_value)
@@ -98,9 +128,43 @@ def print_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int
             row += 1
             print()
 
+#Traverse a given player position combination with action commands to see influence of ghost position
+def traverse_ghost_matrix(ghost_shifted_matrix:dict[tuple[int,int],list[int]], dimension:tuple[int,int], initial_state:tuple[int,int,int]) -> None:
+    action:str = "0"
+    state:tuple[int,int,int] = initial_state
+
+    print(f"GHOST SIMULATION START ({state[2]})")
+    print("[INSERT -1 TO QUIT]")
+    while (action != "-1"):
+        current_map = ghost_shifted_matrix[(state[0], state[1])]
+        print_matrix(current_map, dimension, state)
+        action = str(input("> "))
+
+        if (action == "-1"):
+            print("GHOST SIMULATION END\n")
+        elif (len(action) != 2):
+            print("ERROR. Must pick two actions")
+        elif (not action.isdigit()):
+            print("ERROR. Only insert numeric actions in order (e.g. 01 to move ghosts north, east respectively)")
+        else:
+            newPos_g1:int = parse_action(state[0], int(action[0]), dimension)
+            newPos_g2:int = parse_action(state[1], int(action[1]), dimension)
+            if ( (newPos_g1 == -1) or (newPos_g2 == -1) ):
+                print("Invalid action selected (Trying to move out-of-bounds)")
+            elif ( (current_map[newPos_g1] == -1) or (current_map[newPos_g2] == -1) ):
+                print("Invalid action selected (Cannot move into walls)")
+            else:
+                state = (newPos_g1, newPos_g2, state[2])
+
+#Save a given matrix into the target file. If it already exists, overwrites it.
+def save_matrix(filename:str, upd_matrix:list[int]) -> None:
+    pass
+
 #Now, we test
 empty_matrix = load_base()
-state_so = (79,82,77)
-conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 200, 20)
+state_so = (79,82,154) #154
+#conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 400, 50)
+shift_so = build_ghost_shifted(state_so[2], (18,9))
 #Finally, we show
-print_matrix(conf_so, (18,9), state_so, 200)
+#print_matrix(conf_so, (18,9), state_so)
+traverse_ghost_matrix(shift_so, (18,9), state_so)
