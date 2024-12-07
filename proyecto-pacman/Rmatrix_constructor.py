@@ -29,6 +29,7 @@ with open(IN_FILENAME, 'r') as file:
             else:
                 raise ValueError("Squares must be either spaces (O) or walls (X)")
     
+    #Show that loading was successful
     print(f"SIZE {map_width}x{map_height}")
     acc = 0
     for square in base_map:
