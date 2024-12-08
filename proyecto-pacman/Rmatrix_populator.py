@@ -111,8 +111,10 @@ def print_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int
     for square in target:
         square_norm:int = reduce(square, max_value)
         if ( (square_norm == 0) and (square == 0) ):
-            if ( (acc + row*dimension[0]) == state[0] ) or ( (acc + row*dimension[0]) == state[1] ): #Show ghost's position as blue
+            if ( (acc + row*dimension[0]) == state[0] ): #Show ghost's position as blue
                 print("\033[94m" + "S" + "\033[0m", end="")
+            elif ( (acc + row*dimension[0]) == state[1] ):
+                print("\033[94m" + "Z" + "\033[0m", end="")
             else: #Empty spaces are white
                 print("O", end="")
         elif square_norm >= 0:
@@ -160,11 +162,16 @@ def traverse_ghost_matrix(ghost_shifted_matrix:dict[tuple[int,int],list[int]], d
 def save_matrix(filename:str, upd_matrix:list[int]) -> None:
     pass
 
+#Test performance
+import time 
+
 #Now, we test
 empty_matrix = load_base()
 state_so = (79,82,154) #154
 #conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 400, 50)
+initial_time = time.time()
 shift_so = build_ghost_shifted(state_so[2], (18,9))
+print(f"Operation done in {time.time() - initial_time} seconds")
 #Finally, we show
 #print_matrix(conf_so, (18,9), state_so)
 traverse_ghost_matrix(shift_so, (18,9), state_so)
