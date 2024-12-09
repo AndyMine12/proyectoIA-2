@@ -1,6 +1,8 @@
 BASE_PATH = "base_r.txt"
 WALL_PATH = "wall_index.txt"
 OUTPUT_PATH = "heatmaps.txt"
+SIMPLE_REWARD_OUT_PATH = "simple_reward.txt"
+COMPOUND_REWARD_OUT_PATH = "compound_reward_30.txt"
 
 #Used to monitor performance
 import time 
@@ -24,7 +26,7 @@ def load_walls(filename:str = WALL_PATH) -> list[int]:
             wall_matrix.append(int(value))
     return wall_matrix
 
-#Utility to help traverse the map. Returns -1 if the desired action is illegal
+#Utility to help traverse the map. Returns new position in map or -1 if the desired action is illegal
 def parse_action(initial_pos:int, action:int, dimension:tuple[int,int]) -> int:
     match action:
         case -1: #Stay
@@ -65,23 +67,26 @@ def populate_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,
                         target = populate_matrix(target, dimension, state, newPos, value - decay, decay)
     return target
 
-#Construct dictionary with all possible combinations of ghost positions for a given player position
+#Construct dictionary with all possible combinations of ghost positions for a given player position (with associated heatmaps)
 def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls()) -> dict[tuple[int,int],list[int]]:
     effective_range = []
     for i in range(dimension[0]*dimension[1]):
         if i not in wall_index:
             effective_range.append(i)
+
+    if (player_pos not in effective_range):
+        raise ValueError("Player is not in a valid position. Cannot construct heatmaps")
     
-    r_dict:dict[tuple[int,int],list[int]] = dict()
+    r_heatmap_dict:dict[tuple[int,int],list[int]] = dict()
 
     for ghost1_pos in effective_range:
         for ghost2_pos in effective_range:
             if (ghost1_pos != ghost2_pos):
                 state = (ghost1_pos, ghost2_pos, player_pos)
                 ghost_pos = (ghost1_pos,ghost2_pos)
-                r_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay) 
-                r_dict[ghost_pos] = r_matrix
-    return r_dict   
+                r_heatmap_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay) 
+                r_heatmap_dict[ghost_pos] = r_heatmap_matrix
+    return r_heatmap_dict   
 
 #Construct dictionary with all possible state combinations. Keys are the player's states and value are dictionaries that contain r-matrixes as values and ghost-positions as keys
 def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls(), verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
@@ -95,8 +100,8 @@ def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50
     print_acc = [0, 1]
     timestamp = time.time()
     for position in effective_range:
-        r_dict = build_ghost_shifted(position, dimension, value, decay, base_matrix, wall_index)
-        heatmap_dict[position] = r_dict
+        r_heatmap_dict = build_ghost_shifted(position, dimension, value, decay, base_matrix, wall_index)
+        heatmap_dict[position] = r_heatmap_dict
         if (verbose):
             print_acc[0] += 1
             if ( print_acc[0] >= len(effective_range)*0.05 ):
@@ -171,6 +176,7 @@ def traverse_ghost_matrix(ghost_shifted_matrix:dict[tuple[int,int],list[int]], d
                 state = (newPos_g1, newPos_g2, state[2])
 
 #Save a full heatmap - with all possible state configurations - into target file. If it already exists, overwrites it.
+#NOTE This can also be used to save r-matrixes since they have the same structure, only with different values inside. Whoops.
 def save_heatmap(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], filename:str, verbose:bool = False) -> None:
     print_acc = [0,1]
     timestamp = time.time()
@@ -195,11 +201,82 @@ def save_heatmap(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], filename
     if (verbose):
         print(f"Saving completed in {round(time.time() - timestamp, 4)}s")
 
-#Now, we test full build and saving to file
-full_rmatrix = build_full_shifted((18,9), 400, 50, verbose=True)
+#Generate r-matrixes using generated heatmaps as starting point. Adjacent player states represent ghost-shifted matrixes with player positions as where player may stand on time t+1. Returns state->action matrix. Actions sorted by sequence (0,0), (0,1), (0,2), ...
+#If time_multiplier is non-zero, and adjacent-player-states is not None, compounds available reward for time t with available reward for time t+1.
+def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimension:tuple[int,int], time_multiplier:float = -1.0, adjacent_player_states:list[ dict[tuple[int,int], list[int]] ] = None) -> dict[tuple[int,int], list[int]]:
+    reward_matrix: dict[tuple[int,int], list[int]] = dict()
+    for state in ghost_shifted_matrix.keys():
+        action_list: list[int] = []
+        for action_g1 in range(4): #Try every possible action (north, east, south, west)
+            newPos_g1 = parse_action(state[0], action_g1, dimension)
+            for action_g2 in range(4): #Try every possible action
+                newPos_g2 = parse_action(state[1], action_g2, dimension)
 
-print("Trying to save to txt file...") #WARNING. File weights ~520Mb
-save_heatmap(full_rmatrix, OUTPUT_PATH, True)
+                #Get reward from present time
+                heatmap:list[int] = ghost_shifted_matrix[state]
+                reward:int = -1
+                if (action_g1 != -1) and (action_g2 != -1) and (heatmap[newPos_g1] != -1) and (heatmap[newPos_g2] != -1):
+                    reward = heatmap[newPos_g1] + heatmap[newPos_g2]
+                if (max(heatmap) < 1): #There are no rewards on map. Thus, Pacman was captured. All actions should be tagged as illegal
+                    reward = -1
+
+                #Compose with projected reward in future states, if available
+                if ( (time_multiplier > 0) and (adjacent_player_states is not None) ):
+                    if (reward != -1):
+                        for future_ghost_matrix in adjacent_player_states:
+                            future_heatmap:list[int] = future_ghost_matrix[state]
+                            reward += round(time_multiplier * (future_heatmap[newPos_g1] + future_heatmap[newPos_g2]))
+                elif ( (time_multiplier > 0) or (adjacent_player_states is not None) ): #Show warning if future states are badly configured - if at least one of them is correct. Else, assume that future projection is unavailable/not desired
+                    print('\033[93m' + "WARN" + "\033[0m" + ". Time multiplier (must be higher than zero) or adjacent states (must be not None) not valid. Ignoring time projection.")
+                
+                action_list.append(reward)
+        reward_matrix[state] = action_list
+    return reward_matrix
+
+#Generate r-matrixes using fully generated heatmap combinations as starting point. Adjacent player states represent ghost-shifted matrixes with player positions as where player may stand on time t+1. Returns state->action matrix. Actions sorted by sequence (0,0), (0,1), (0,2), ...
+#If time multiplier is non-zero, compounds available reward for time t with available reward on time t+1
+def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], dimension:tuple[int, int], time_multiplier:float = -1.0, verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
+    full_reward_matrix:dict[int,dict[tuple[int,int],list[int]]] = dict()
+    
+    print_acc:list[int] = [0,1]
+    timestamp:float = time.time() #Monitor performance
+    for player_pos in full_heatmap.keys():
+        adjacent_heatmap_list = None
+        if (time_multiplier > 0):
+            adjacent_heatmap_list = []
+            for action in range(4): #Try with all possible player movements (North, East, South, West)
+                newPos:int = parse_action(player_pos, action, dimension)
+                if (newPos in full_heatmap.keys()):
+                    adjacent_heatmap_list.append(full_heatmap[newPos])
+        
+        reward_matrix = to_reward_matrix(full_heatmap[player_pos], dimension, time_multiplier, adjacent_heatmap_list)
+        full_reward_matrix[player_pos] = reward_matrix
+
+        if (verbose):
+            print_acc[0] += 1
+            if ( print_acc[0] >= len(full_heatmap.keys())*0.05 ):
+                print(f"Reward combination {print_acc[1]*5}% done (in {round(time.time() - timestamp, 4)}s)")
+                print_acc[0] = 0
+                print_acc[1] += 1
+    if (verbose):
+        print(f"Reward combination completed in {round(time.time() - timestamp, 4)}s")
+    return full_reward_matrix
+
+#Now, we test full build and saving to file
+full_heatmap = build_full_shifted((18,9), 400, 50, verbose=True)
+# print("Trying to save to txt file...") #WARNING. File weights ~520Mb
+# save_heatmap(full_heatmap, OUTPUT_PATH, True)
+
+#After, we test building action->reward matrixes without time projection
+print("Simple reward construction")
+simple_reward = to_reward_combination(full_heatmap, (18,9), -1, True)
+save_heatmap(simple_reward, SIMPLE_REWARD_OUT_PATH, True)
+
+#Finally, add time projection with 0.30 multiplier
+print("Compound reward construction (0.30 time multiplier)")
+compound_reward_30 = to_reward_combination(full_heatmap, (18,9), 0.3, True)
+save_heatmap(compound_reward_30, COMPOUND_REWARD_OUT_PATH, True)
+
 
 #* Remove comments below to test ghost matrix traversal
 
