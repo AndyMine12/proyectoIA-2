@@ -1,6 +1,9 @@
-import json
 BASE_PATH = "base_r.txt"
 WALL_PATH = "wall_index.txt"
+OUTPUT_PATH = "heatmaps.txt"
+
+#Used to monitor performance
+import time 
 
 # NOTE - ALL state tuples are given as (ghost1-pos, ghost2-pos, player-pos)
 
@@ -20,21 +23,6 @@ def load_walls(filename:str = WALL_PATH) -> list[int]:
         for value in file_str.split("|"):
             wall_matrix.append(int(value))
     return wall_matrix
-
-#Load given state's matrix from specified json file.
-def load_matrix(filename:str, state:tuple[int,int,int], default_fallback:bool = False) -> list[int]:
-    with open(filename, 'r') as file:
-        with json.load(file) as data:
-            result:list[int] = []
-            try:
-                result = (data[state[2]])[(state[0],state[1])] #Access value as top-level (player-position) then key (ghost-position as tuple)
-            except Exception as error:
-                if (default_fallback):
-                    print("\033[93m" + "WARN" + "\033[0m" + ". Value not found. Assigning default")
-                    result = load_base()
-                else:
-                    raise error
-            return result
 
 #Utility to help traverse the map. Returns -1 if the desired action is illegal
 def parse_action(initial_pos:int, action:int, dimension:tuple[int,int]) -> int:
@@ -91,9 +79,33 @@ def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 40
             if (ghost1_pos != ghost2_pos):
                 state = (ghost1_pos, ghost2_pos, player_pos)
                 ghost_pos = (ghost1_pos,ghost2_pos)
-                r_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay)
+                r_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay) 
                 r_dict[ghost_pos] = r_matrix
     return r_dict   
+
+#Construct dictionary with all possible state combinations. Keys are the player's states and value are dictionaries that contain r-matrixes as values and ghost-positions as keys
+def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls(), verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
+    effective_range = []
+    for i in range(dimension[0]*dimension[1]):
+        if i not in wall_index:
+            effective_range.append(i)
+    
+    heatmap_dict:dict[int,dict[tuple[int,int],list[int]]] = dict()
+
+    print_acc = [0, 1]
+    timestamp = time.time()
+    for position in effective_range:
+        r_dict = build_ghost_shifted(position, dimension, value, decay, base_matrix, wall_index)
+        heatmap_dict[position] = r_dict
+        if (verbose):
+            print_acc[0] += 1
+            if ( print_acc[0] >= len(effective_range)*0.05 ):
+                print(f"Full build {print_acc[1]*5}% done (in {round(time.time() - timestamp, 4)}s)")
+                print_acc[0] = 0
+                print_acc[1] += 1
+    if (verbose):
+        print(f"Full build completed in {round(time.time() - timestamp, 4)}s")
+    return heatmap_dict
 
 #Print matrix to console, showing values
 def print_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,int,int]) -> None:
@@ -158,20 +170,46 @@ def traverse_ghost_matrix(ghost_shifted_matrix:dict[tuple[int,int],list[int]], d
             else:
                 state = (newPos_g1, newPos_g2, state[2])
 
-#Save a given matrix into the target file. If it already exists, overwrites it.
-def save_matrix(filename:str, upd_matrix:list[int]) -> None:
-    pass
+#Save a full heatmap - with all possible state configurations - into target file. If it already exists, overwrites it.
+def save_heatmap(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], filename:str, verbose:bool = False) -> None:
+    print_acc = [0,1]
+    timestamp = time.time()
+    with open(filename, 'w') as file:
+        for player_pos in full_heatmap.keys():
+            for ghost_pos in full_heatmap[player_pos].keys():
+                state_str = str(ghost_pos[0]) + "|" + str(ghost_pos[1]) + "|" + str(player_pos)
+                data_str = ""
+                current_matrix = full_heatmap[player_pos][ghost_pos]
+                for index,value in enumerate(current_matrix):
+                    data_str += str(value)
+                    if index < (len(current_matrix) - 1):
+                        data_str += "|"
+                file.write(state_str + " = " + data_str + "\n")
 
-#Test performance
-import time 
+            if (verbose):
+                print_acc[0] += 1
+                if ( print_acc[0] >= len(full_heatmap.keys())*0.05 ):
+                    print(f"Saving {print_acc[1]*5}% done (in {round(time.time() - timestamp, 4)}s)")
+                    print_acc[0] = 0
+                    print_acc[1] += 1
+    if (verbose):
+        print(f"Saving completed in {round(time.time() - timestamp, 4)}s")
 
-#Now, we test
-empty_matrix = load_base()
-state_so = (79,82,154) #154
+#Now, we test full build and saving to file
+full_rmatrix = build_full_shifted((18,9), 400, 50, verbose=True)
+
+print("Trying to save to txt file...") #WARNING. File weights ~520Mb
+save_heatmap(full_rmatrix, OUTPUT_PATH, True)
+
+#* Remove comments below to test ghost matrix traversal
+
+#empty_matrix = load_base()
+#state_so = (79,82,154) #154
 #conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 400, 50)
-initial_time = time.time()
-shift_so = build_ghost_shifted(state_so[2], (18,9))
-print(f"Operation done in {time.time() - initial_time} seconds")
-#Finally, we show
-#print_matrix(conf_so, (18,9), state_so)
-traverse_ghost_matrix(shift_so, (18,9), state_so)
+
+#initial_time = time.time()
+#shift_so = build_ghost_shifted(state_so[2], (18,9))
+#print(f"Operation done in {time.time() - initial_time} seconds")
+
+##Finally, we show
+#traverse_ghost_matrix(shift_so, (18,9), state_so)
