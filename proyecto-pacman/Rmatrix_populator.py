@@ -68,7 +68,7 @@ def populate_matrix(target:list[int], dimension:tuple[int,int], state:tuple[int,
     return target
 
 #Construct dictionary with all possible combinations of ghost positions for a given player position (with associated heatmaps)
-def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls()) -> dict[tuple[int,int],list[int]]:
+def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls(), is_conmutative:bool = False) -> dict[tuple[int,int],list[int]]:
     effective_range = []
     for i in range(dimension[0]*dimension[1]):
         if i not in wall_index:
@@ -82,14 +82,15 @@ def build_ghost_shifted(player_pos:int, dimension:tuple[int,int], value:int = 40
     for ghost1_pos in effective_range:
         for ghost2_pos in effective_range:
             if (ghost1_pos != ghost2_pos):
-                state = (ghost1_pos, ghost2_pos, player_pos)
-                ghost_pos = (ghost1_pos,ghost2_pos)
-                r_heatmap_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay) 
-                r_heatmap_dict[ghost_pos] = r_heatmap_matrix
+                if (ghost1_pos < ghost2_pos) or (not is_conmutative):
+                    state = (ghost1_pos, ghost2_pos, player_pos)
+                    ghost_pos = (ghost1_pos,ghost2_pos)
+                    r_heatmap_matrix:list[int] = populate_matrix(base_matrix.copy(), dimension, state, None, value, decay) 
+                    r_heatmap_dict[ghost_pos] = r_heatmap_matrix
     return r_heatmap_dict   
 
 #Construct dictionary with all possible state combinations. Keys are the player's states and value are dictionaries that contain r-matrixes as values and ghost-positions as keys
-def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls(), verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
+def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50, base_matrix:list[int] = load_base(), wall_index:list[int] = load_walls(), verbose:bool = False, is_conmutative:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
     effective_range = []
     for i in range(dimension[0]*dimension[1]):
         if i not in wall_index:
@@ -100,7 +101,7 @@ def build_full_shifted(dimension:tuple[int,int], value:int = 400, decay:int = 50
     print_acc = [0, 1]
     timestamp = time.time()
     for position in effective_range:
-        r_heatmap_dict = build_ghost_shifted(position, dimension, value, decay, base_matrix, wall_index)
+        r_heatmap_dict = build_ghost_shifted(position, dimension, value, decay, base_matrix, wall_index, is_conmutative)
         heatmap_dict[position] = r_heatmap_dict
         if (verbose):
             print_acc[0] += 1
@@ -262,21 +263,29 @@ def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]],
         print(f"Reward combination completed in {round(time.time() - timestamp, 4)}s")
     return full_reward_matrix
 
-#Now, we test full build and saving to file
-full_heatmap = build_full_shifted((18,9), 400, 50, verbose=True)
-# print("Trying to save to txt file...") #WARNING. File weights ~520Mb
-# save_heatmap(full_heatmap, OUTPUT_PATH, True)
+#* Remove comments below to construct regular, non-conmutative, reward matrixes
 
-#After, we test building action->reward matrixes without time projection
-print("Simple reward construction")
-simple_reward = to_reward_combination(full_heatmap, (18,9), -1, True)
-save_heatmap(simple_reward, SIMPLE_REWARD_OUT_PATH, True)
+# #Now, we test full build and saving to file
+# full_heatmap = build_full_shifted((18,9), 400, 50, verbose=True)
+# # print("Trying to save to txt file...") #WARNING. File weights ~520Mb
+# # save_heatmap(full_heatmap, OUTPUT_PATH, True)
 
-#Finally, add time projection with 0.30 multiplier
-print("Compound reward construction (0.30 time multiplier)")
-compound_reward_30 = to_reward_combination(full_heatmap, (18,9), 0.3, True)
-save_heatmap(compound_reward_30, COMPOUND_REWARD_OUT_PATH, True)
+# #After, we test building action->reward matrixes without time projection
+# print("Simple reward construction")
+# simple_reward = to_reward_combination(full_heatmap, (18,9), -1, True)
+# save_heatmap(simple_reward, SIMPLE_REWARD_OUT_PATH, True)
 
+# #Finally, add time projection with 0.30 multiplier
+# print("Compound reward construction (0.30 time multiplier)")
+# compound_reward_30 = to_reward_combination(full_heatmap, (18,9), 0.3, True)
+# save_heatmap(compound_reward_30, COMPOUND_REWARD_OUT_PATH, True)
+
+
+#* Remove comments below to construct conmutative reward matrixes
+full_conm_heatmap = build_full_shifted((18,9), 400, 50, verbose=True, is_conmutative=True)
+print("Reward construction")
+conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 0.3, True)
+save_heatmap(conm_reward, "conm_compound_reward_30.txt", True)
 
 #* Remove comments below to test ghost matrix traversal
 
