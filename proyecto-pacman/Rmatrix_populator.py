@@ -178,15 +178,15 @@ def traverse_ghost_matrix(ghost_shifted_matrix:dict[tuple[int,int],list[int]], d
 
 #Save a full heatmap - with all possible state configurations - into target file. If it already exists, overwrites it.
 #NOTE This can also be used to save r-matrixes since they have the same structure, only with different values inside. Whoops.
-def save_heatmap(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], filename:str, verbose:bool = False) -> None:
+def save_full_matrix(full_matrix:dict[int,dict[tuple[int,int],list[int]]], filename:str, verbose:bool = False) -> None:
     print_acc = [0,1]
     timestamp = time.time()
     with open(filename, 'w') as file:
-        for player_pos in full_heatmap.keys():
-            for ghost_pos in full_heatmap[player_pos].keys():
+        for player_pos in full_matrix.keys():
+            for ghost_pos in full_matrix[player_pos].keys():
                 state_str = str(ghost_pos[0]) + "|" + str(ghost_pos[1]) + "|" + str(player_pos)
                 data_str = ""
-                current_matrix = full_heatmap[player_pos][ghost_pos]
+                current_matrix = full_matrix[player_pos][ghost_pos]
                 for index,value in enumerate(current_matrix):
                     data_str += str(value)
                     if index < (len(current_matrix) - 1):
@@ -195,7 +195,7 @@ def save_heatmap(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], filename
 
             if (verbose):
                 print_acc[0] += 1
-                if ( print_acc[0] >= len(full_heatmap.keys())*0.05 ):
+                if ( print_acc[0] >= len(full_matrix.keys())*0.05 ):
                     print(f"Saving {print_acc[1]*5}% done (in {round(time.time() - timestamp, 4)}s)")
                     print_acc[0] = 0
                     print_acc[1] += 1
@@ -263,39 +263,40 @@ def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]],
         print(f"Reward combination completed in {round(time.time() - timestamp, 4)}s")
     return full_reward_matrix
 
-#* Remove comments below to construct regular, non-conmutative, reward matrixes
+if __name__ == "__main__": #Only execute building commands if this is the main file being executed
+    #* Remove comments below to construct regular, non-conmutative, reward matrixes
 
-# #Now, we test full build and saving to file
-# full_heatmap = build_full_shifted((18,9), 400, 50, verbose=True)
-# # print("Trying to save to txt file...") #WARNING. File weights ~520Mb
-# # save_heatmap(full_heatmap, OUTPUT_PATH, True)
+    # #Now, we test full build and saving to file
+    # full_heatmap = build_full_shifted((18,9), 400, 50, verbose=True)
+    # # print("Trying to save to txt file...") #WARNING. File weights ~520Mb
+    # # save_full_matrix(full_heatmap, OUTPUT_PATH, True)
 
-# #After, we test building action->reward matrixes without time projection
-# print("Simple reward construction")
-# simple_reward = to_reward_combination(full_heatmap, (18,9), -1, True)
-# save_heatmap(simple_reward, SIMPLE_REWARD_OUT_PATH, True)
+    # #After, we test building action->reward matrixes without time projection
+    # print("Simple reward construction")
+    # simple_reward = to_reward_combination(full_heatmap, (18,9), -1, True)
+    # save_full_matrix(simple_reward, SIMPLE_REWARD_OUT_PATH, True)
 
-# #Finally, add time projection with 0.30 multiplier
-# print("Compound reward construction (0.30 time multiplier)")
-# compound_reward_30 = to_reward_combination(full_heatmap, (18,9), 0.3, True)
-# save_heatmap(compound_reward_30, COMPOUND_REWARD_OUT_PATH, True)
+    # #Finally, add time projection with 0.30 multiplier
+    # print("Compound reward construction (0.30 time multiplier)")
+    # compound_reward_30 = to_reward_combination(full_heatmap, (18,9), 0.3, True)
+    # save_full_matrix(compound_reward_30, COMPOUND_REWARD_OUT_PATH, True)
 
 
-#* Remove comments below to construct conmutative reward matrixes
-full_conm_heatmap = build_full_shifted((18,9), 400, 50, verbose=True, is_conmutative=True)
-print("Reward construction")
-conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 0.3, True)
-save_heatmap(conm_reward, "conm_compound_reward_30.txt", True)
+    #* Remove comments below to construct conmutative reward matrixes
+    full_conm_heatmap = build_full_shifted((18,9), 400, 50, verbose=True, is_conmutative=True)
+    print("Reward construction")
+    conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 0.3, True)
+    save_full_matrix(conm_reward, "conm_compound_reward_30.txt", True)
 
-#* Remove comments below to test ghost matrix traversal
+    #* Remove comments below to test ghost matrix traversal
 
-#empty_matrix = load_base()
-#state_so = (79,82,154) #154
-#conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 400, 50)
+    # empty_matrix = load_base()
+    # state_so = (79,82,154) #154
+    # conf_so = populate_matrix(empty_matrix.copy(), (18,9), state_so, None, 400, 50)
 
-#initial_time = time.time()
-#shift_so = build_ghost_shifted(state_so[2], (18,9))
-#print(f"Operation done in {time.time() - initial_time} seconds")
+    # initial_time = time.time()
+    # shift_so = build_ghost_shifted(state_so[2], (18,9))
+    # print(f"Operation done in {time.time() - initial_time} seconds")
 
-##Finally, we show
-#traverse_ghost_matrix(shift_so, (18,9), state_so)
+    # #Finally, we show
+    # traverse_ghost_matrix(shift_so, (18,9), state_so)
