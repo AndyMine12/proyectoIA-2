@@ -1,18 +1,14 @@
-from Rmatrix_populator import parse_action, save_full_matrix, print_matrix, load_base, load_walls
-
-R_MATRIX_PATH = "conm_compound_reward_30.txt"
+from Rmatrix_populator import load_base, load_walls
+from GhostAI import GhostAI
 
 #Used to monitor performance
 import time 
-# Print time taken (in seconds) to sucessfully compute the given function call
-def performance_decorator(function):
-    def wrapper(*args, **kwargs):
-        timestamp = time.time()
-        result = function(*args, **kwargs)
-        print(f"{function.__name__} completed in {round(time.time() - timestamp, 4)}s")
-        return result
-    
-    return wrapper
+from Performance_util import performance_decorator, get_timestamp
+
+R_MATRIX_PATH = "output-files/rmatrix_v2.txt"
+Q_MATRIX_PATH = "output-files/qmatrix.txt"
+LOAD_Q_MATRIX = False
+DEFAULT_ERROR_RECORD_PATH = "output-files/ai-error-records/"
 
 #Initialize a qtable from a given reward table 
 def qtable_initializer(r_table:dict[tuple[int,int], list[int]]) -> dict[tuple[int,int], list[int]]:
@@ -87,7 +83,45 @@ def load_full_matrix(filename:str, dimension:tuple[int,int], verbose:bool = Fals
         print(f"Loading completed in {round(time.time() - timestamp, 4)}s")
     return matrix
 
-rmatrix = load_full_matrix(R_MATRIX_PATH, (18,9))
-qmatrix = qmatrix_initializer(rmatrix)
+if __name__ == "__main__":
+    #Get full r-matrix from disk and initialize q-matrix
+    rmatrix = load_full_matrix(R_MATRIX_PATH, (18,9))
+    if (not LOAD_Q_MATRIX):
+        qmatrix = qmatrix_initializer(rmatrix)
+    else:
+        qmatrix = load_full_matrix(Q_MATRIX_PATH, (18,9))
+    print(f"Total states Q|R -> {len(qmatrix.keys())}|{len(rmatrix.keys())}")
 
-print(f"Total states Q|R -> {len(qmatrix.keys())}|{len(rmatrix.keys())}")
+    #Initialize states and ai_brain
+    state_so = (79,82,154)
+    ai_brain = GhostAI(state_so, load_walls(), (18,9), qmatrix, 1)
+
+    #Load all target positions
+    target_positions:list[int] = []
+    walls = load_walls()
+    for i in range(18*9):
+        if i not in walls:
+            target_positions.append(i)
+
+    for position in target_positions:
+        episode_count = 10000
+        max_steps = 3000
+        print(f"Training begin ({position}). {episode_count} Episodes of maximum {max_steps} steps each")
+        error_list = ai_brain.simulate_train(rmatrix, True, 0.7, 0.05, 0.15, episode_count, max_steps, round(episode_count/10))
+        print(f"Training ended ({position}). Error: {error_list[-1]}")
+
+        #SAVE ERROR RECORDS
+        error_record_filename = DEFAULT_ERROR_RECORD_PATH + "record-" + str(position) + "_" + str(round(error_list[-1], 4)) + "_" + get_timestamp() + ".csv"
+        with open(error_record_filename, 'w') as file:
+            for index,value in enumerate(error_list):
+                file.write(str(value))
+                if index < (len(error_list) - 1):
+                    file.write(",")
+        print(f"Error records saved sucessfully at {error_record_filename}")
+    
+    #* SAVE Q-MATRIX
+    ai_brain.save_matrix()
+
+    #* ONLY SAVE UPDATED TABLE
+    # ai_brain.save_table()
+    # print("Table saved sucessfully")
