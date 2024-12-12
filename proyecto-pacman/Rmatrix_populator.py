@@ -218,6 +218,8 @@ def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimen
                 reward:int = -1
                 if (action_g1 != -1) and (action_g2 != -1) and (heatmap[newPos_g1] != -1) and (heatmap[newPos_g2] != -1):
                     reward = heatmap[newPos_g1] + heatmap[newPos_g2]
+                if (newPos_g1 == newPos_g2): #Ghosts cannot land on the same square
+                    reward = -1
                 if ( (max(heatmap) < 1) and (reward != -1) ): #There are no rewards on map. Thus, Pacman was captured. All legal actions should be tagged as max-prize, to make ghosts choose this action more often when looking for future reward
                     reward = stay_prize
 
@@ -286,7 +288,7 @@ if __name__ == "__main__": #Only execute building commands if this is the main f
     full_conm_heatmap = build_full_shifted((18,9), 400, 50, verbose=True, is_conmutative=True)
     print("Reward construction")
     conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 1000, 0.3, True)
-    save_full_matrix(conm_reward, "output-files/rmatrix_v1.txt", True)
+    save_full_matrix(conm_reward, "output-files/rmatrix_v2.txt", True)
 
     #* Remove comments below to test ghost matrix traversal
 
