@@ -199,8 +199,7 @@ def save_full_matrix(full_matrix:dict[int,dict[tuple[int,int],list[int]]], filen
                     print(f"Saving {print_acc[1]*5}% done (in {round(time.time() - timestamp, 4)}s)")
                     print_acc[0] = 0
                     print_acc[1] += 1
-    if (verbose):
-        print(f"Saving completed in {round(time.time() - timestamp, 4)}s")
+    print(f"Matrix saved successfully at {filename} (in {round(time.time() - timestamp, 4)}s)")
 
 #Generate r-matrixes using generated heatmaps as starting point. Adjacent player states represent ghost-shifted matrixes with player positions as where player may stand on time t+1. Returns state->action matrix. Actions sorted by sequence (0,0), (0,1), (0,2), ...
 #If time_multiplier is non-zero, and adjacent-player-states is not None, compounds available reward for time t with available reward for time t+1.

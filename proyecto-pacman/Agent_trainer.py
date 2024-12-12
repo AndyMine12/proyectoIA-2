@@ -103,10 +103,12 @@ if __name__ == "__main__":
         if i not in walls:
             target_positions.append(i)
 
+    acc = 25
     for position in target_positions:
         episode_count = 10000
         max_steps = 3000
         print(f"Training begin ({position}). {episode_count} Episodes of maximum {max_steps} steps each")
+        ai_brain.update_player_pos(position)
         error_list = ai_brain.simulate_train(rmatrix, True, 0.7, 0.05, 0.15, episode_count, max_steps, round(episode_count/10))
         print(f"Training ended ({position}). Error: {error_list[-1]}")
 
@@ -118,6 +120,11 @@ if __name__ == "__main__":
                 if index < (len(error_list) - 1):
                     file.write(",")
         print(f"Error records saved sucessfully at {error_record_filename}")
+
+        acc -= 1
+        if (acc <= 0):
+            ai_brain.save_matrix()
+            acc = 25
     
     #* SAVE Q-MATRIX
     ai_brain.save_matrix()

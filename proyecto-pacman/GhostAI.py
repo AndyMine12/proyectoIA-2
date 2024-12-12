@@ -85,7 +85,9 @@ class GhostAI:
     
     #Saves current q-matrix to file
     @performance_decorator
-    def save_matrix(self, filename:str = DEFAULT_SAVE_PATH + "GhostAI_" + get_timestamp() + ".txt") -> None:
+    def save_matrix(self, filename:str = None) -> None:
+        if (filename is None):
+            filename = DEFAULT_SAVE_PATH + "GhostAI_" + get_timestamp() + ".txt"
         save_full_matrix(self._q_matrix, filename)
     #Saves table corresponding to current player position to file
     def save_table(self, filename:str = None):
