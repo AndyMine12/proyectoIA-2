@@ -1,5 +1,5 @@
-BASE_PATH = "output-files/base_r.txt"
-WALL_PATH = "output-files/wall_index.txt"
+BASE_PATH = "base-files/base_r.txt"
+WALL_PATH = "base-files/wall_index.txt"
 OUTPUT_PATH = "output-files/heatmaps.txt"
 SIMPLE_REWARD_OUT_PATH = "output-files/simple_reward.txt"
 COMPOUND_REWARD_OUT_PATH = "output-files/compound_reward_30.txt"

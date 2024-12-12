@@ -1,6 +1,6 @@
-IN_FILENAME = "map.txt"
-OUT_FILENAME = "base_r.txt"
-WALL_FILENAME = "wall_index.txt"
+IN_FILENAME = "base-files/map.txt"
+OUT_FILENAME = "base-files/base_r.txt"
+WALL_FILENAME = "base-files/wall_index.txt"
 base_map: list[int] = []
 wall_index: list[int] = []
 
