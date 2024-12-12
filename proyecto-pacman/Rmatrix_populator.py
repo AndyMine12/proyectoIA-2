@@ -1,8 +1,8 @@
-BASE_PATH = "base_r.txt"
-WALL_PATH = "wall_index.txt"
-OUTPUT_PATH = "heatmaps.txt"
-SIMPLE_REWARD_OUT_PATH = "simple_reward.txt"
-COMPOUND_REWARD_OUT_PATH = "compound_reward_30.txt"
+BASE_PATH = "output-files/base_r.txt"
+WALL_PATH = "output-files/wall_index.txt"
+OUTPUT_PATH = "output-files/heatmaps.txt"
+SIMPLE_REWARD_OUT_PATH = "output-files/simple_reward.txt"
+COMPOUND_REWARD_OUT_PATH = "output-files/compound_reward_30.txt"
 
 #Used to monitor performance
 import time 
@@ -204,7 +204,7 @@ def save_full_matrix(full_matrix:dict[int,dict[tuple[int,int],list[int]]], filen
 
 #Generate r-matrixes using generated heatmaps as starting point. Adjacent player states represent ghost-shifted matrixes with player positions as where player may stand on time t+1. Returns state->action matrix. Actions sorted by sequence (0,0), (0,1), (0,2), ...
 #If time_multiplier is non-zero, and adjacent-player-states is not None, compounds available reward for time t with available reward for time t+1.
-def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimension:tuple[int,int], time_multiplier:float = -1.0, adjacent_player_states:list[ dict[tuple[int,int], list[int]] ] = None) -> dict[tuple[int,int], list[int]]:
+def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimension:tuple[int,int], stay_prize:int = 1000, time_multiplier:float = -1.0, adjacent_player_states:list[ dict[tuple[int,int], list[int]] ] = None) -> dict[tuple[int,int], list[int]]:
     reward_matrix: dict[tuple[int,int], list[int]] = dict()
     for state in ghost_shifted_matrix.keys():
         action_list: list[int] = []
@@ -218,8 +218,8 @@ def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimen
                 reward:int = -1
                 if (action_g1 != -1) and (action_g2 != -1) and (heatmap[newPos_g1] != -1) and (heatmap[newPos_g2] != -1):
                     reward = heatmap[newPos_g1] + heatmap[newPos_g2]
-                if (max(heatmap) < 1): #There are no rewards on map. Thus, Pacman was captured. All actions should be tagged as illegal
-                    reward = -1
+                if ( (max(heatmap) < 1) and (reward != -1) ): #There are no rewards on map. Thus, Pacman was captured. All legal actions should be tagged as max-prize, to make ghosts choose this action more often when looking for future reward
+                    reward = stay_prize
 
                 #Compose with projected reward in future states, if available
                 if ( (time_multiplier > 0) and (adjacent_player_states is not None) ):
@@ -236,7 +236,7 @@ def to_reward_matrix(ghost_shifted_matrix:dict[tuple[int,int], list[int]], dimen
 
 #Generate r-matrixes using fully generated heatmap combinations as starting point. Adjacent player states represent ghost-shifted matrixes with player positions as where player may stand on time t+1. Returns state->action matrix. Actions sorted by sequence (0,0), (0,1), (0,2), ...
 #If time multiplier is non-zero, compounds available reward for time t with available reward on time t+1
-def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], dimension:tuple[int, int], time_multiplier:float = -1.0, verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
+def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]], dimension:tuple[int, int], stay_prize:int = 1000, time_multiplier:float = -1.0, verbose:bool = False) -> dict[int,dict[tuple[int,int],list[int]]]:
     full_reward_matrix:dict[int,dict[tuple[int,int],list[int]]] = dict()
     
     print_acc:list[int] = [0,1]
@@ -250,7 +250,7 @@ def to_reward_combination(full_heatmap:dict[int,dict[tuple[int,int],list[int]]],
                 if (newPos in full_heatmap.keys()):
                     adjacent_heatmap_list.append(full_heatmap[newPos])
         
-        reward_matrix = to_reward_matrix(full_heatmap[player_pos], dimension, time_multiplier, adjacent_heatmap_list)
+        reward_matrix = to_reward_matrix(full_heatmap[player_pos], dimension, stay_prize, time_multiplier, adjacent_heatmap_list)
         full_reward_matrix[player_pos] = reward_matrix
 
         if (verbose):
@@ -285,8 +285,8 @@ if __name__ == "__main__": #Only execute building commands if this is the main f
     #* Remove comments below to construct conmutative reward matrixes
     full_conm_heatmap = build_full_shifted((18,9), 400, 50, verbose=True, is_conmutative=True)
     print("Reward construction")
-    conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 0.3, True)
-    save_full_matrix(conm_reward, "conm_compound_reward_30.txt", True)
+    conm_reward = to_reward_combination(full_conm_heatmap, (18,9), 1000, 0.3, True)
+    save_full_matrix(conm_reward, "output-files/rmatrix_v1.txt", True)
 
     #* Remove comments below to test ghost matrix traversal
 
