@@ -1,6 +1,7 @@
 {
     "conventionalCommits.scopes": [
         "Preprocessing",
-        "Training"
+        "Training",
+        "Testing"
     ]
 }

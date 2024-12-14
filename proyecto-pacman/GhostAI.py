@@ -1,5 +1,5 @@
 import random
-from Rmatrix_populator import save_full_matrix
+from Rmatrix_populator import save_full_matrix, load_base, BASE_PATH
 from Performance_util import get_timestamp, performance_decorator
 
 DEFAULT_SAVE_PATH = "output-files/ai-tables/"
@@ -165,7 +165,7 @@ class GhostAI:
             for action in action_list:
                 if (reward_list[self.get_action_index(action)] >= max_reward):
                     action_candidates.append(action)
-            return random.choice(action_list)
+            return random.choice(action_candidates)
     
     def update_q_value(self, action_index:int, new_value:int) -> None:
         #Demeter will probably die reading this. Do not try to understand, just *flow* with it ;-;
@@ -238,5 +238,146 @@ class GhostAI:
         self.update_self_pos(start_pos) #Restore previous position after simulation
         self.epsilon = start_epsilon #Restore previous epsilon
         return error_list
+    
+    #Print map state to console, showing next action
+    def print_state(self,  map_filename = BASE_PATH, action:tuple[int,int] = None, powerups:tuple[int,int] = None) -> None:
+        map = load_base(map_filename)
+        acc = 0
+        row = 0
+        new_pos = None
+        if (action is not None):
+            new_pos = self.parse_action(action)
+        state = self.state
+
+        for index, square in enumerate(map):
+            printed:bool = True
+            if (square == 0):
+                if ( index == state[0] ): #Show ghosts' position as blue
+                    if (index == state[2]): #The ghost murdered Pac-man
+                        print("\033[93m" + "S" + "\033[0m", end="")
+                    else:
+                        print("\033[94m" + "S" + "\033[0m", end="")
+                elif ( index == state[1] ):
+                    if (index == state[2]): #The ghost murdered Pac-man
+                        print("\033[93m" + "Z" + "\033[0m", end="")
+                    else:
+                        print("\033[94m" + "Z" + "\033[0m", end="")
+                elif ( index == state[2] ): #Show Pac-man's location as yellow, unless targeted by a ghost
+                    if (new_pos is not None):
+                        if (index == new_pos[0]) or (index == new_pos[1]): #Show targeted spaces
+                            print("\033[91m\033[1m" + "C" + "\033[0m", end="") #Pac-man is in danger
+                        else:
+                            print("\033[93m\033[1m" + "C" + "\033[0m", end="")
+                    else:
+                        print("\033[93m\033[1m" + "C" + "\033[0m", end="")
+                else: #Not yet printed anything
+                    printed = False
+                if (new_pos is not None) and (not printed):
+                    if (index == new_pos[0]) or (index == new_pos[1]): #Show targeted spaces
+                        print("\033[94m" + "~" + "\033[0m", end="")
+                        printed = True
+                if (powerups is not None) and (not printed):
+                    if (index == powerups[0]) or (index == powerups[1]): #Show powerup position
+                        print("\033[92m" + "X" + "\033[0m", end="")
+                        printed = True
+                if (not printed): #Empty spaces are white
+                    print("O", end="")
+            else: #Show walls as red
+                print("\033[91m" + "#" + "\033[0m", end="")
+            acc += 1
+            if (acc >= self._dimension[0]):
+                acc = 0
+                row += 1
+                print()
+
+    def simulate_game(self, map_filename = BASE_PATH, deploy_powerups:bool = False, game_epsilon:float = None) -> None:
+        def parse_player_move(current_pos:int, action:int) -> int:
+            new_pos:int = -1
+            match action:
+                case 0: #Move north
+                    candidate = current_pos - self._dimension[0]
+                    if (candidate < 0):
+                        new_pos = -1
+                    elif (candidate in self._wall_index):
+                        new_pos = -1
+                    else:
+                        new_pos = candidate
+                case 1: #Move east
+                    candidate = current_pos + 1
+                    if ( (current_pos % self._dimension[0]) == (self._dimension[0] - 1) ):
+                        new_pos = -1
+                    elif (candidate in self._wall_index):
+                        new_pos = -1
+                    else:
+                        new_pos = candidate
+                case 2: #Move south
+                    candidate = current_pos + self._dimension[0]
+                    if (candidate > ((self._dimension[0]*self._dimension[1])-1)):
+                        new_pos = -1
+                    elif (candidate in self._wall_index):
+                        new_pos = -1
+                    else:
+                        new_pos = candidate
+                case 3: #Move west
+                    candidate = current_pos - 1
+                    if ( (current_pos % self._dimension[0]) == (0) ):
+                        new_pos = -1
+                    elif (candidate in self._wall_index):
+                        new_pos = -1
+                    else:
+                        new_pos = current_pos - 1
+            return new_pos
+        
+        def is_collision() -> bool:
+            if self._player_pos in self.ghost_pos:
+                return True
+            return False
+        
+        old_epsilon = self.epsilon
+        if (game_epsilon is not None):
+            self.epsilon = game_epsilon
+        
+        self.update_self_pos((79,82))
+        self.update_player_pos(153)
+        player_move:str = ""
+        is_alive:bool = True
+
+        powerups:tuple[int,int] = None
+        is_super:bool = False
+        if (deploy_powerups):
+            print("Powerups not implemented") #to-do Implement powerups
+
+        print("SIMULATION STARTED (lose or type 'exit' to close)")
+        step = 0
+        while ( (player_move != "exit") and (is_alive) ):
+            action = self.pick_action(self.epsilon < 0.01)
+            self.print_state(map_filename, action, powerups)
+            player_move = str(input(f"(t = {step}, s = {self.state}, a = {action})\n> "))
+
+            if (player_move == "exit"):
+                print("GAME SIMULATION END\n")
+            elif ( (len(player_move) != 1) and (player_move != "-1") ):
+                print("ERROR. Must pick one action only")
+            elif ( (not player_move.isdigit()) and not ((player_move[0] in "+-") and (player_move[1:].isdigit())) ):
+                print("ERROR. Only insert numeric action (-1 to stay, 0 to move north, 1 to move east, 2 to move south, 3 to move west)")
+            elif (parse_player_move(self._player_pos, int(player_move)) == -1):
+                print("Invalid action selected (Cannot move into walls nor out-of-bounds)")
+            else: #Legal action selected
+                player_new_pos = parse_player_move(self._player_pos, int(player_move))
+                step += 1 #Move to next timestep
+
+                self.update_player_pos(player_new_pos)
+                if (is_collision()): #to-do Consider powerup state
+                    is_alive = False
+                else:
+                    self.update_self_pos(self.parse_action(action))
+                    is_alive = not is_collision() #to-do Consider powerup state
+                if (not is_alive):
+                    print("\033[91m" + "\tYOU LOST" + "\033[0m")
+                    print(f"Survived for {step} time steps")
+                    self.print_state(map_filename, None, powerups)
+                    print("GAME SIMULATION END\n")
+        self.epsilon = old_epsilon #Restore epsilon before game simulation
+
 
 
