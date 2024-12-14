@@ -299,6 +299,8 @@ class GhostAI:
         def parse_player_move(current_pos:int, action:int) -> int:
             new_pos:int = -1
             match action:
+                case -1: #Stay
+                    new_pos = current_pos
                 case 0: #Move north
                     candidate = current_pos - self._dimension[0]
                     if (candidate < 0):
