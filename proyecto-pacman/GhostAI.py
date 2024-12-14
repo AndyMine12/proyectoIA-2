@@ -99,7 +99,7 @@ class GhostAI:
     #Parses and determinates if proposed action is legal (and returns new positions if so) or not (returns -1,-1)
     def parse_action(self, action_tuple:tuple[int, int]) -> tuple[int, int]:
         newPos:list[int] = []
-        for oldPos, action in zip(self.ghost_pos, action_tuple):
+        for oldPos, action in zip((self._lower_pos, self._higher_pos), action_tuple):
             match action:
                 case 0: #Move north
                     candidate = oldPos - self._dimension[0]
@@ -135,6 +135,8 @@ class GhostAI:
                         newPos.append(oldPos - 1)
         if (newPos[0] == newPos[1]): #Ghosts cannot land on the same square
             newPos = [-1,-1]
+        if (self._inverted_pos): #to-do Cleaner way to implement this?
+            newPos.sort(reverse=True)
         return tuple(newPos)
     
     #Return list with all available actions for current state
@@ -165,6 +167,9 @@ class GhostAI:
             for action in action_list:
                 if (reward_list[self.get_action_index(action)] >= max_reward):
                     action_candidates.append(action)
+            if (action_candidates == []):
+                print("\033[93m" + f"WARN. Action candidates empty when selecting optimal action for state {self.state}\nInternal\n\tLower: {self._lower_pos}, Higher: {self._higher_pos}, Player: {self._player_pos}\n\tAction list: {action_list}" + "\033[0m")
+                action_candidates = action_list
             return random.choice(action_candidates)
     
     def update_q_value(self, action_index:int, new_value:int) -> None:
@@ -290,7 +295,7 @@ class GhostAI:
                 row += 1
                 print()
 
-    def simulate_game(self, map_filename = BASE_PATH, deploy_powerups:bool = False, game_epsilon:float = None) -> None:
+    def simulate_game(self, resume_game:bool = False, map_filename = BASE_PATH, deploy_powerups:bool = False, game_epsilon:float = None) -> None:
         def parse_player_move(current_pos:int, action:int) -> int:
             new_pos:int = -1
             match action:
@@ -337,8 +342,9 @@ class GhostAI:
         if (game_epsilon is not None):
             self.epsilon = game_epsilon
         
-        self.update_self_pos((79,82))
-        self.update_player_pos(153)
+        if (not resume_game):
+            self.update_self_pos((79,82))
+            self.update_player_pos(153)
         player_move:str = ""
         is_alive:bool = True
 
@@ -376,7 +382,7 @@ class GhostAI:
                     print("\033[91m" + "\tYOU LOST" + "\033[0m")
                     print(f"Survived for {step} time steps")
                     self.print_state(map_filename, None, powerups)
-                    print("GAME SIMULATION END\n")
+                    print("\nGAME SIMULATION END\n")
         self.epsilon = old_epsilon #Restore epsilon before game simulation
 
 
